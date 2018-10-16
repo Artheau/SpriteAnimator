@@ -738,6 +738,7 @@ public class AnimatorGUI {
 		peepsList.append("\n\nCode contribution:\n");
 		peepsList.append(String.join(", ",
 				new String[]{
+						"Artheau", // Artheau: "If I'm going to fuck up your code I should at least pee on your tree"
 						"MikeTrethewey", // God dammit, stop being so helpful
 						"Zarby89", // spr conversion
 						"Roxas232", // reload button
