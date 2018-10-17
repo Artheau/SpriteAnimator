@@ -1491,6 +1491,60 @@ public class AnimatorGUI {
 		}
 	}
 
+	public static int[] palExtract(byte[] pixels) {
+		int[] ret = new int[64];
+		int pali = 0;
+		int startAt = (128 * 448 - 8) - (128 * 7);
+		int endAt = startAt + (8 * 128);
+		byte b1 = pixels[startAt*4+1];
+		byte g1 = pixels[startAt*4+2];
+		byte r1 = pixels[startAt*4+3];
+		for (int i = startAt; i < endAt; i+= 128) {
+			for (int j = 0; j < 8; j++) {
+				int k = i + j;
+				int b = Byte.toUnsignedInt(pixels[k*4+1]);
+				int g = Byte.toUnsignedInt(pixels[k*4+2]);
+				int r = Byte.toUnsignedInt(pixels[k*4+3]);
+				ret[pali] = (1000000 * r) + (1000 * g) + b;
+				pali++;
+				// remove the 8x8 block by setting it to green mail trans
+				pixels[k*4+1] = b1;
+				pixels[k*4+2] = g1;
+				pixels[k*4+3] = r1;
+			}
+		}
+
+		// fill out the palette by removing empty indices
+		for (int i = 16; i < 64; i++) {
+			if (ret[i] == ret[0])
+				ret[i] = ret[i%16];
+		}
+
+		// add gloves colors
+		ret = addGlovesToRGBPal(ret);
+
+		return ret;
+	}
+
+	public static int[] GLOVE_PAL_INDICES = new int[] { 16, 32 };
+	
+	public static int[] addGlovesToRGBPal(int[] pal) {
+		int[] ret = new int[66];
+		// clone most of the 64 length array
+		for (int i = 0; i < 64; i++) {
+			ret[i] = pal[i];
+		}
+
+		// set gloves colors using transparent indices of 2nd and 3rd mail palettes
+		for (int i = 0; i < GLOVE_PAL_INDICES.length; i++) {
+			if (ret[GLOVE_PAL_INDICES[i]] != 0) {
+				ret[64+i] = ret[GLOVE_PAL_INDICES[i]];
+			}
+		}
+
+		return ret;
+	}
+
 	private static void loadSprite(SpriteAnimator a, String fileName)
 			throws IOException, ZSPRFormatException {
 		// read the file
@@ -1520,24 +1574,65 @@ public class AnimatorGUI {
 		// png files
 		} else if (fileType.equalsIgnoreCase("png")) {
 			File temp = new File(fileName);
-			BufferedImage img = ImageIO.read(temp);
-			int w = img.getWidth();
-			int h = img.getHeight();
+			BufferedImage imgOrig = ImageIO.read(temp);
+			int w = imgOrig.getWidth();                     //get width, height, ensure correct size
+			int h = imgOrig.getHeight();
 			if (w != 128 || h != 448) {
 				throw new ZSPRFormatException(
 						"Invalid dimensions of {" + w + "," + h + "}\n" +
 						"Image dimensions must be 128x448");
 			}
 
-			BufferedImage mails[][] = new BufferedImage[5][3];
+
+			int[] palette = null;
+			byte[] pixels = null;
+			BufferedReader br;
+
+			byte[][][] eightbyeight;
+			
+			boolean extensionERR = false; // let the program spit out all extension errors at once
+			boolean patchingROM = false;
+
+		
+			
+			// convert to RGB colorspace
+			BufferedImage img = SpriteManipulator.convertToABGR(imgOrig);
+
+			// image raster
+			try {
+				pixels = SpriteManipulator.getImageRaster(img);
+			} catch (Exception e) {
+			}
+
+			// round image raster
+			pixels = SpriteManipulator.roundRaster(pixels);
+
+			palette = palExtract(pixels);
+			palData = SpriteManipulator.getPalDataFromArray(palette);
+		
+			
+			// split bytes into blocks
+			eightbyeight = SpriteManipulator.indexAnd8x8(pixels, palette);
+			glovesData = SpriteManipulator.getGlovesDataFromArray(palette);
+			spriteData = SpriteManipulator.export8x8ToSPR(eightbyeight);
+			
+
+			byte[][][] ebe = SpriteManipulator.makeSpr8x8(spriteData);
+			BufferedImage[][] mails = SpriteManipulator.makeAllMails(ebe, palData, glovesData);
+			
+
+			/*
+			BufferedImage mails[][] = new BufferedImage[5][3];   //5 mails (GBRBunnyZap) and 3 glove colors
 			for (int i = 0; i < mails.length; i++) {
 				for (int j = 0; j < mails[i].length; j++) {
 					mails[i][j] = img;
 				}
 			}
+			*/
+			mails[0][0] = imgOrig;
 
 			a.setSprite(spriteName, mails);
-			return;
+			return;           //early exit in the case of PNG means the rest of this loop will not be done
 		} else {
 			return;
 		}
